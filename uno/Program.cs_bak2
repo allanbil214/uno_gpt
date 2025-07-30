@@ -1,0 +1,748 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace UnoGame
+{
+    // Enumerations
+    public enum Color
+    {
+        Red,
+        Blue,
+        Green,
+        Yellow
+    }
+
+    public enum CardType
+    {
+        Number,
+        Action,
+        Wild
+    }
+
+    public enum ActionType
+    {
+        Skip,
+        Reverse,
+        DrawTwo
+    }
+
+    public enum WildType
+    {
+        Wild,
+        WildDrawFour
+    }
+
+    // Abstract Card class
+    public abstract class Card
+    {
+        public Color Color { get; protected set; }
+        public CardType Type { get; protected set; }
+
+        public Card(Color color, CardType type)
+        {
+            Color = color;
+            Type = type;
+        }
+
+        public abstract bool CanPlayOn(Card topCard, Color? wildColor = null);
+        public abstract void Execute(GameController gameController);
+        public abstract int GetPoints();
+        public abstract override string ToString();
+    }
+
+    // NumberCard class
+    public class NumberCard : Card
+    {
+        public int Number { get; private set; }
+
+        public NumberCard(Color color, int number) : base(color, CardType.Number)
+        {
+            Number = number;
+        }
+
+        public override bool CanPlayOn(Card topCard, Color? wildColor = null)
+        {
+            Color effectiveColor = wildColor ?? topCard.Color;
+            
+            if (topCard is NumberCard numberCard)
+                return Color == effectiveColor || Number == numberCard.Number;
+            
+            return Color == effectiveColor;
+        }
+
+        public override void Execute(GameController gameController)
+        {
+            // Number cards don't have special effects
+        }
+
+        public override int GetPoints()
+        {
+            return Number;
+        }
+
+        public override string ToString()
+        {
+            return $"{Color} {Number}";
+        }
+    }
+
+    // ActionCard class
+    public class ActionCard : Card
+    {
+        public ActionType Action { get; private set; }
+
+        public ActionCard(Color color, ActionType action) : base(color, CardType.Action)
+        {
+            Action = action;
+        }
+
+        public override bool CanPlayOn(Card topCard, Color? wildColor = null)
+        {
+            Color effectiveColor = wildColor ?? topCard.Color;
+            
+            if (topCard is ActionCard actionCard)
+                return Color == effectiveColor || Action == actionCard.Action;
+            
+            return Color == effectiveColor;
+        }
+
+        public override void Execute(GameController gameController)
+        {
+            switch (Action)
+            {
+                case ActionType.Skip:
+                    gameController.NextPlayer();
+                    break;
+                case ActionType.Reverse:
+                    gameController.ReverseDirection();
+                    break;
+                case ActionType.DrawTwo:
+                    gameController.NextPlayer();
+                    var nextPlayer = gameController.GetCurrentPlayer();
+                    for (int i = 0; i < 2; i++)
+                    {
+                        var drawnCard = gameController.DrawCard();
+                        if (drawnCard != null)
+                            nextPlayer.AddCard(drawnCard);
+                    }
+                    gameController.NextPlayer();
+                    break;
+            }
+        }
+
+        public override int GetPoints()
+        {
+            return 20;
+        }
+
+        public override string ToString()
+        {
+            return $"{Color} {Action}";
+        }
+    }
+
+    // WildCard class
+    public class WildCard : Card
+    {
+        public WildType WildType { get; private set; }
+
+        public WildCard(WildType wildType) : base(Color.Red, CardType.Wild) // Default color, will be changed when played
+        {
+            WildType = wildType;
+        }
+
+        public override bool CanPlayOn(Card topCard, Color? wildColor = null)
+        {
+            return true; // Wild cards can always be played
+        }
+
+        public override void Execute(GameController gameController)
+        {
+            if (WildType == WildType.WildDrawFour)
+            {
+                gameController.NextPlayer();
+                var nextPlayer = gameController.GetCurrentPlayer();
+                for (int i = 0; i < 4; i++)
+                {
+                    var drawnCard = gameController.DrawCard();
+                    if (drawnCard != null)
+                        nextPlayer.AddCard(drawnCard);
+                }
+                gameController.NextPlayer();
+            }
+        }
+
+        public override int GetPoints()
+        {
+            return 50;
+        }
+
+        public override string ToString()
+        {
+            return WildType == WildType.Wild ? "Wild" : "Wild Draw Four";
+        }
+    }
+
+    // Abstract Player class
+    public abstract class Player
+    {
+        public string Name { get; private set; }
+        public bool HasCalledUno { get; private set; }
+        protected List<Card> hand;
+
+        public Player(string name)
+        {
+            Name = name;
+            HasCalledUno = false;
+            hand = new List<Card>();
+        }
+
+        public void AddCard(Card card)
+        {
+            hand.Add(card);
+        }
+
+        public bool RemoveCard(Card card)
+        {
+            return hand.Remove(card);
+        }
+
+        public int GetHandSize()
+        {
+            return hand.Count;
+        }
+
+        public bool HasCard(Card card)
+        {
+            return hand.Contains(card);
+        }
+
+        public List<Card> GetPlayableCards(Card topCard, Color? wildColor = null)
+        {
+            return hand.Where(card => card.CanPlayOn(topCard, wildColor)).ToList();
+        }
+
+        public abstract Card ChooseCard(Card topCard, Color? wildColor = null);
+
+        public void CallUno()
+        {
+            HasCalledUno = true;
+        }
+
+        public void ResetUnoCall()
+        {
+            HasCalledUno = false;
+        }
+
+        public List<Card> GetHand()
+        {
+            return new List<Card>(hand);
+        }
+    }
+
+    // HumanPlayer class
+    public class HumanPlayer : Player
+    {
+        public HumanPlayer(string name) : base(name) { }
+
+        public override Card ChooseCard(Card topCard, Color? wildColor = null)
+        {
+            var playableCards = GetPlayableCards(topCard, wildColor);
+            
+            if (!playableCards.Any())
+                return null;
+
+            Console.WriteLine($"\n{Name}'s turn!");
+            Console.WriteLine($"Top card: {topCard}" + (wildColor.HasValue ? $" (Wild color: {wildColor})" : ""));
+            Console.WriteLine("Your hand:");
+            
+            for (int i = 0; i < hand.Count; i++)
+            {
+                bool canPlay = hand[i].CanPlayOn(topCard, wildColor);
+                Console.WriteLine($"{i + 1}. {hand[i]}" + (canPlay ? " [PLAYABLE]" : ""));
+            }
+
+            Console.WriteLine($"{hand.Count + 1}. Draw a card");
+            Console.WriteLine($"{hand.Count + 2}. Call UNO");
+
+            while (true)
+            {
+                Console.Write("Choose an option: ");
+                if (int.TryParse(Console.ReadLine(), out int choice))
+                {
+                    if (choice == hand.Count + 1)
+                        return null; // Draw card
+                    
+                    if (choice == hand.Count + 2)
+                    {
+                        CallUno();
+                        Console.WriteLine("UNO called!");
+                        continue;
+                    }
+
+                    if (choice >= 1 && choice <= hand.Count)
+                    {
+                        var selectedCard = hand[choice - 1];
+                        if (selectedCard.CanPlayOn(topCard, wildColor))
+                            return selectedCard;
+                        else
+                            Console.WriteLine("That card cannot be played!");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid choice!");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Please enter a number!");
+                }
+            }
+        }
+    }
+
+    // BotPlayer class
+    public class BotPlayer : Player
+    {
+        private Random random = new Random();
+
+        public BotPlayer(string name) : base(name) { }
+
+        public override Card ChooseCard(Card topCard, Color? wildColor = null)
+        {
+            var playableCards = GetPlayableCards(topCard, wildColor);
+            
+            if (!playableCards.Any())
+                return null;
+
+            // Simple AI: prefer action/wild cards, then random
+            var actionCards = playableCards.Where(c => c.Type == CardType.Action || c.Type == CardType.Wild).ToList();
+            if (actionCards.Any())
+                return actionCards[random.Next(actionCards.Count)];
+
+            return playableCards[random.Next(playableCards.Count)];
+        }
+    }
+
+    // Deck class
+    public class Deck
+    {
+        private List<Card> cards;
+        private Random random = new Random();
+
+        public Deck()
+        {
+            cards = new List<Card>();
+            InitializeDeck();
+            Shuffle();
+        }
+
+        private void InitializeDeck()
+        {
+            // Number cards (0-9 for each color, 0 appears once, 1-9 appear twice)
+            foreach (Color color in Enum.GetValues<Color>())
+            {
+                cards.Add(new NumberCard(color, 0));
+                for (int number = 1; number <= 9; number++)
+                {
+                    cards.Add(new NumberCard(color, number));
+                    cards.Add(new NumberCard(color, number));
+                }
+            }
+
+            // Action cards (2 of each for each color)
+            foreach (Color color in Enum.GetValues<Color>())
+            {
+                foreach (ActionType action in Enum.GetValues<ActionType>())
+                {
+                    cards.Add(new ActionCard(color, action));
+                    cards.Add(new ActionCard(color, action));
+                }
+            }
+
+            // Wild cards (4 of each type)
+            for (int i = 0; i < 4; i++)
+            {
+                cards.Add(new WildCard(WildType.Wild));
+                cards.Add(new WildCard(WildType.WildDrawFour));
+            }
+        }
+
+        public void Shuffle()
+        {
+            var n = cards.Count;
+            while (n > 1)
+            {
+                n--;
+                var k = random.Next(n + 1);
+                (cards[k], cards[n]) = (cards[n], cards[k]);
+            }
+        }
+
+        public Card DrawCard()
+        {
+            if (cards.Count == 0)
+                return null;
+
+            var card = cards[0];
+            cards.RemoveAt(0);
+            return card;
+        }
+
+        public void AddCards(List<Card> newCards)
+        {
+            cards.AddRange(newCards);
+            Shuffle();
+        }
+
+        public bool IsEmpty()
+        {
+            return cards.Count == 0;
+        }
+    }
+
+    // DiscardPile class
+    public class DiscardPile
+    {
+        private List<Card> cards;
+
+        public DiscardPile()
+        {
+            cards = new List<Card>();
+        }
+
+        public void AddCard(Card card)
+        {
+            cards.Add(card);
+        }
+
+        public Card GetTopCard()
+        {
+            return cards.Count > 0 ? cards[cards.Count - 1] : null;
+        }
+
+        public bool IsEmpty()
+        {
+            return cards.Count == 0;
+        }
+
+        public List<Card> TakeAllExceptTop()
+        {
+            if (cards.Count <= 1)
+                return new List<Card>();
+
+            var cardsToTake = cards.Take(cards.Count - 1).ToList();
+            cards = new List<Card> { cards.Last() };
+            return cardsToTake;
+        }
+    }
+
+    // GameController class
+    public class GameController
+    {
+        private List<Player> players;
+        private Deck deck;
+        private DiscardPile discardPile;
+        private int currentPlayerIndex;
+        private bool clockwise;
+        private Color? wildColor;
+
+        public event Action<Player> OnPlayerTurnChanged;
+        public event Action<Player, Card> OnCardPlayed;
+        public event Action<Player> OnUnoViolation;
+        public event Action<Player> OnGameEnded;
+
+        public GameController()
+        {
+            players = new List<Player>();
+            deck = new Deck();
+            discardPile = new DiscardPile();
+            currentPlayerIndex = 0;
+            clockwise = true;
+            wildColor = null;
+        }
+
+        public void AddPlayer(Player player)
+        {
+            players.Add(player);
+        }
+
+        public void StartGame()
+        {
+            if (players.Count < 2)
+            {
+                Console.WriteLine("Need at least 2 players to start the game!");
+                return;
+            }
+
+            // Deal 7 cards to each player
+            foreach (var player in players)
+            {
+                for (int i = 0; i < 7; i++)
+                {
+                    var card = deck.DrawCard();
+                    if (card != null)
+                        player.AddCard(card);
+                }
+            }
+
+            // Draw first card for discard pile (make sure it's not a wild card)
+            Card firstCard;
+            do
+            {
+                firstCard = deck.DrawCard();
+            } while (firstCard?.Type == CardType.Wild);
+
+            if (firstCard != null)
+            {
+                discardPile.AddCard(firstCard);
+                if (firstCard.Type == CardType.Action)
+                    firstCard.Execute(this);
+            }
+
+            Console.WriteLine($"Game started! First card: {firstCard}");
+            GameLoop();
+        }
+
+        private void GameLoop()
+        {
+            while (!IsGameOver())
+            {
+                var currentPlayer = GetCurrentPlayer();
+                OnPlayerTurnChanged?.Invoke(currentPlayer);
+
+                Console.WriteLine($"\n--- {currentPlayer.Name}'s Turn ---");
+                Console.WriteLine($"Cards in hand: {currentPlayer.GetHandSize()}");
+
+                var topCard = discardPile.GetTopCard();
+                var chosenCard = currentPlayer.ChooseCard(topCard, wildColor);
+
+                if (chosenCard == null)
+                {
+                    // Player chose to draw a card
+                    var drawnCard = DrawCard();
+                    if (drawnCard != null)
+                    {
+                        currentPlayer.AddCard(drawnCard);
+                        Console.WriteLine($"{currentPlayer.Name} drew a card.");
+                        
+                        // Check if drawn card can be played
+                        if (drawnCard.CanPlayOn(topCard, wildColor))
+                        {
+                            if (currentPlayer is HumanPlayer)
+                            {
+                                Console.WriteLine($"You drew: {drawnCard}");
+                                Console.WriteLine("Do you want to play it? (y/n)");
+                                var response = Console.ReadLine()?.ToLower();
+                                if (response == "y" || response == "yes")
+                                {
+                                    chosenCard = drawnCard;
+                                }
+                            }
+                            else
+                            {
+                                // Bot automatically plays if possible
+                                chosenCard = drawnCard;
+                            }
+                        }
+                    }
+                }
+
+                if (chosenCard != null && PlayCard(chosenCard))
+                {
+                    // Check for UNO violation
+                    if (currentPlayer.GetHandSize() == 1 && !currentPlayer.HasCalledUno)
+                    {
+                        CheckUnoViolation(currentPlayer);
+                    }
+                }
+
+                if (!IsGameOver())
+                    NextPlayer();
+
+                // Reset UNO call for next turn
+                currentPlayer.ResetUnoCall();
+            }
+
+            var winner = GetWinner();
+            if (winner != null)
+            {
+                Console.WriteLine($"\n🎉 {winner.Name} wins the game! 🎉");
+                OnGameEnded?.Invoke(winner);
+            }
+        }
+
+        public bool PlayCard(Card card)
+        {
+            var currentPlayer = GetCurrentPlayer();
+            var topCard = discardPile.GetTopCard();
+
+            if (!card.CanPlayOn(topCard, wildColor))
+                return false;
+
+            if (!currentPlayer.RemoveCard(card))
+                return false;
+
+            discardPile.AddCard(card);
+            wildColor = null;
+
+            Console.WriteLine($"{currentPlayer.Name} played: {card}");
+
+            // Handle wild card color selection
+            if (card.Type == CardType.Wild)
+            {
+                if (currentPlayer is HumanPlayer)
+                {
+                    Console.WriteLine("Choose a color:");
+                    Console.WriteLine("1. Red");
+                    Console.WriteLine("2. Blue");
+                    Console.WriteLine("3. Green");
+                    Console.WriteLine("4. Yellow");
+                    
+                    while (true)
+                    {
+                        Console.Write("Enter choice (1-4): ");
+                        if (int.TryParse(Console.ReadLine(), out int colorChoice) && colorChoice >= 1 && colorChoice <= 4)
+                        {
+                            wildColor = (Color)(colorChoice - 1);
+                            break;
+                        }
+                        Console.WriteLine("Invalid choice!");
+                    }
+                }
+                else
+                {
+                    // Bot chooses most common color in hand
+                    var hand = currentPlayer.GetHand();
+                    var colorCounts = new Dictionary<Color, int>();
+                    foreach (Color color in Enum.GetValues<Color>())
+                    {
+                        colorCounts[color] = hand.Count(c => c.Color == color && c.Type != CardType.Wild);
+                    }
+                    wildColor = colorCounts.OrderByDescending(kvp => kvp.Value).First().Key;
+                }
+                
+                Console.WriteLine($"{currentPlayer.Name} chose {wildColor} as the new color.");
+            }
+
+            OnCardPlayed?.Invoke(currentPlayer, card);
+            card.Execute(this);
+
+            return true;
+        }
+
+        public Card DrawCard()
+        {
+            if (deck.IsEmpty())
+            {
+                var cardsToShuffle = discardPile.TakeAllExceptTop();
+                if (cardsToShuffle.Any())
+                {
+                    deck.AddCards(cardsToShuffle);
+                    Console.WriteLine("Deck reshuffled from discard pile.");
+                }
+            }
+
+            return deck.DrawCard();
+        }
+
+        public void NextPlayer()
+        {
+            if (clockwise)
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
+            else
+                currentPlayerIndex = (currentPlayerIndex - 1 + players.Count) % players.Count;
+        }
+
+        public void ReverseDirection()
+        {
+            clockwise = !clockwise;
+            Console.WriteLine("Direction reversed!");
+        }
+
+        public Player GetCurrentPlayer()
+        {
+            return players[currentPlayerIndex];
+        }
+
+        public bool IsGameOver()
+        {
+            return players.Any(p => p.GetHandSize() == 0);
+        }
+
+        public Player GetWinner()
+        {
+            return players.FirstOrDefault(p => p.GetHandSize() == 0);
+        }
+
+        public bool CallUno(Player player)
+        {
+            player.CallUno();
+            return true;
+        }
+
+        public bool CheckUnoViolation(Player player)
+        {
+            if (player.GetHandSize() == 1 && !player.HasCalledUno)
+            {
+                Console.WriteLine($"UNO violation! {player.Name} must draw 2 cards for not calling UNO!");
+                PenalizePlayer(player);
+                OnUnoViolation?.Invoke(player);
+                return true;
+            }
+            return false;
+        }
+
+        public void PenalizePlayer(Player player)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                var card = DrawCard();
+                if (card != null)
+                    player.AddCard(card);
+            }
+        }
+    }
+
+    // Main Program
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Welcome to UNO!");
+            Console.WriteLine("================");
+
+            var gameController = new GameController();
+
+            // Get number of players
+            Console.Write("Enter number of human players (1-4): ");
+            int humanPlayers = 1;
+            if (int.TryParse(Console.ReadLine(), out int players) && players >= 1 && players <= 4)
+                humanPlayers = players;
+
+            // Add human players
+            for (int i = 0; i < humanPlayers; i++)
+            {
+                Console.Write($"Enter name for Player {i + 1}: ");
+                string name = Console.ReadLine();
+                if (string.IsNullOrEmpty(name))
+                    name = $"Player {i + 1}";
+                gameController.AddPlayer(new HumanPlayer(name));
+            }
+
+            // Add bot players to make it 4 players total
+            string[] botNames = { "Alice Bot", "Bob Bot", "Charlie Bot" };
+            for (int i = humanPlayers; i < 4; i++)
+            {
+                gameController.AddPlayer(new BotPlayer(botNames[i - humanPlayers]));
+            }
+
+            // Start the game
+            gameController.StartGame();
+
+            Console.WriteLine("\nPress any key to exit...");
+            Console.ReadKey();
+        }
+    }
+}

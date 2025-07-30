@@ -1,0 +1,20 @@
+using System;
+
+namespace Uno
+{
+    public enum Color : byte {Red, Green, Blue, Yellow}
+    public enum CardType {Number, Action, Wild}
+
+    public interface ICard
+    {
+        CardType ManageCardType(get; set;)
+        int ManageNumber{ get; set; }
+    }
+    class Program
+    {
+        static void Main(string[] args)
+        {
+
+        }
+    }
+}

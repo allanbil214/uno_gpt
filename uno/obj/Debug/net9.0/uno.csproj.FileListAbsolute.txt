@@ -1,0 +1,14 @@
+C:\Users\Allan\Documents\testing\uno\bin\Debug\net9.0\uno.exe
+C:\Users\Allan\Documents\testing\uno\bin\Debug\net9.0\uno.deps.json
+C:\Users\Allan\Documents\testing\uno\bin\Debug\net9.0\uno.runtimeconfig.json
+C:\Users\Allan\Documents\testing\uno\bin\Debug\net9.0\uno.dll
+C:\Users\Allan\Documents\testing\uno\bin\Debug\net9.0\uno.pdb
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.AssemblyInfoInputs.cache
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.AssemblyInfo.cs
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.csproj.CoreCompileInputs.cache
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.dll
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\refint\uno.dll
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.pdb
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\uno.genruntimeconfig.cache
+C:\Users\Allan\Documents\testing\uno\obj\Debug\net9.0\ref\uno.dll
